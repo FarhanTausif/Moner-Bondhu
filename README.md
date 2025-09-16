@@ -47,28 +47,47 @@ A modern, minimalistic, and emotionally soothing one-page chatbot UI for mental 
 
 ```
 Moner-Bondhu/
-├── app/
-│   ├── globals.css          # Global styles and theme variables
-│   ├── layout.js           # Root layout with providers
-│   └── page.js             # Main page component
-├── components/
-│   ├── ui/                 # ShadCN UI components
-│   │   ├── button.js
-│   │   ├── input.js
-│   │   ├── switch.js
-│   │   ├── dropdown-menu.js
-│   │   ├── scroll-area.js
-│   │   └── card.js
-│   ├── Navbar.js           # Top navigation bar
-│   ├── ChatInterface.js    # Main chat component
-│   ├── MessageBubble.js    # Individual message components
-│   └── ResourcesSidebar.js # Resources and helplines
-├── contexts/
-│   ├── ThemeContext.js     # Dark/light mode management
-│   └── LanguageContext.js  # Bilingual support
-├── lib/
-│   └── utils.js           # Utility functions
-└── package.json
+├── frontend/
+│   ├── app/
+│   │   ├── globals.css            # Global styles and theme variables
+│   │   ├── layout.js              # Root layout with providers
+│   │   └── page.js                # Main page component
+│   ├── components/
+│   │   ├── ui/                    # ShadCN UI components
+│   │   │   ├── button.js
+│   │   │   ├── card.js
+│   │   │   ├── dropdown-menu.js
+│   │   │   ├── input.js
+│   │   │   ├── scroll-area.js
+│   │   │   └── switch.js
+│   │   ├── Navbar.js              # Top navigation bar
+│   │   ├── ChatInterface.js       # Main chat component
+│   │   ├── MessageBubble.js       # Individual message component
+│   │   └── ResourcesSidebar.js    # Resources and helplines sidebar
+│   ├── contexts/
+│   │   ├── ThemeContext.js        # Dark/light mode context
+│   │   └── LanguageContext.js     # Language context for bilingual support
+│   ├── lib/
+│   │   └── utils.js               # Utility functions
+│   ├── public/                    # Static assets (images, icons, etc.)
+│   ├── package.json
+│   ├── jsconfig.json
+│   ├── next.config.js
+│   ├── postcss.config.js
+│   ├── tailwind.config.js
+│   └── README.md
+├── backend/
+│   ├── app/
+│   │   ├── main.py                # FastAPI application
+│   │   ├── schemas.py             # Pydantic request/response models
+│   │   └── __pycache__/           # Python cache files
+│   ├── bert_model_corrected.pt    # Pre-trained BERT model
+│   ├── requirements.txt           # Python dependencies
+│   ├── start.sh                   # Startup script (venv, install, run server)
+│   ├── AI Model.ipynb             # Model training/experimentation notebook
+│   └──  README.md
+├── System_Overview.md             # System architecture and data flow
+├── README.md                      # Main project documentation
 ```
 
 ## 🚀 Getting Started
@@ -121,7 +140,7 @@ const handleSend = async () => {
   // Current: Mock emotion detection and response generation
   // TODO: Replace with actual API calls
   
-  const response = await fetch('/api/chat', {
+  const response = await fetch('/api/v/chat', {
     method: 'POST',
     body: JSON.stringify({
       message: inputValue,
