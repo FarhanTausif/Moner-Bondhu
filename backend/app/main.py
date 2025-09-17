@@ -1,16 +1,14 @@
 from fastapi import FastAPI, Request, HTTPException
 from app.schemas import ChatRequest, ChatResponse, ErrorResponse
 import torch
-import torch.nn as nn
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
 import os 
 
 app = FastAPI()
 
 # Load model once at startup
-MODEL_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "bert_model_corrected.pt")
-INTENT_MODEL_NAME = "intent_model.pt"
-TOKENIZER_PATH = "./intent_model"
+EMOTION_MODEL_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "bert_model_corrected.pt")
+INTENT_MODEL_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "intent_model.pt")    
 model = None
 tokenizer = None
 intent_model = None
@@ -19,17 +17,17 @@ intent_tokenizer = None
 @app.on_event("startup")
 async def load_model():
 	global model, tokenizer, intent_model, intent_tokenizer
-	if os.path.exists(MODEL_PATH):
+	if os.path.exists(EMOTION_MODEL_PATH):
 		
 		try:
 			# Load the saved model
-			saved_data = torch.load(MODEL_PATH, map_location=torch.device("cpu"))
+			saved_data = torch.load(EMOTION_MODEL_PATH, map_location=torch.device("cpu"), weights_only=False)
 			
 			# Initialize tokenizer
 			tokenizer = AutoTokenizer.from_pretrained('bert-base-uncased')
 
-			intent_tokenizer = AutoTokenizer.from_pretrained(TOKENIZER_PATH)
-			intent_model = torch.load(INTENT_MODEL_NAME, map_location=torch.device("cpu"))
+			intent_tokenizer = AutoTokenizer.from_pretrained(os.path.join(os.path.dirname(__file__), "intent_model"))
+			intent_model = torch.load(INTENT_MODEL_PATH, map_location=torch.device("cpu"), weights_only=False)
 			intent_model.eval()
 			print("Intent model loaded successfully")
 			
@@ -59,7 +57,23 @@ async def load_model():
 			intent_tokenizer = None
 				
 	else:
-		print(f"Model file not found: {MODEL_PATH}")
+		print(f"Model file not found: {EMOTION_MODEL_PATH}")
+
+@app.get("/health")
+async def health_check():
+    """Health check endpoint"""
+    if model is None or tokenizer is None or intent_model is None or intent_tokenizer is None:
+        raise HTTPException(status_code=503, detail="Models not loaded properly")
+    
+    return {
+        "status": "healthy",
+        "models_loaded": {
+            "emotion_model": model is not None,
+            "emotion_tokenizer": tokenizer is not None,
+            "intent_model": intent_model is not None,
+            "intent_tokenizer": intent_tokenizer is not None
+        }
+    }
 
 def predict_intent(text: str, threshold: float = 0.7):
     inputs = intent_tokenizer(text, return_tensors="pt", truncation=True, padding=True, max_length=512)
@@ -98,7 +112,12 @@ def predict_emotion(text: str, threshold: float = 0.7):
         return "uncertain", confidence
     return class_responses.get(pred_idx, "I'm here to listen."), confidence
 
-@app.post("/api/v/chat", response_model=ChatResponse)
+@app.post("/api/v/chat", 
+         response_model=ChatResponse,
+         responses={
+             400: {"model": ErrorResponse, "description": "Bad Request"},
+             500: {"model": ErrorResponse, "description": "Internal Server Error"}
+         })
 async def chat(request: ChatRequest) -> ChatResponse:
 	if not request.prompt:
 		raise HTTPException(status_code=400, detail="Prompt is required.")
