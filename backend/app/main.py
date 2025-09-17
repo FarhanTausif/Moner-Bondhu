@@ -9,7 +9,8 @@ app = FastAPI()
 
 # Load model once at startup
 MODEL_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "bert_model_corrected.pt")
-INTENT_MODEL_NAME = "yeniguno/bert-uncased-intent-classification"
+INTENT_MODEL_NAME = "intent_model.pt"
+TOKENIZER_PATH = "./intent_model"
 model = None
 tokenizer = None
 intent_model = None
@@ -26,8 +27,9 @@ async def load_model():
 			
 			# Initialize tokenizer
 			tokenizer = AutoTokenizer.from_pretrained('bert-base-uncased')
-			intent_tokenizer = AutoTokenizer.from_pretrained(INTENT_MODEL_NAME)
-			intent_model = AutoModelForSequenceClassification.from_pretrained(INTENT_MODEL_NAME)
+
+			intent_tokenizer = AutoTokenizer.from_pretrained(TOKENIZER_PATH)
+			intent_model = torch.load(INTENT_MODEL_NAME, map_location=torch.device("cpu"))
 			intent_model.eval()
 			print("Intent model loaded successfully")
 			
