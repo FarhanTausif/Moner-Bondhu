@@ -17,14 +17,19 @@ intent_tokenizer = None
 
 @app.on_event("startup")
 async def load_model():
-	global model, tokenizer
+	global model, tokenizer, intent_model, intent_tokenizer
 	if os.path.exists(MODEL_PATH):
+		
 		try:
 			# Load the saved model
 			saved_data = torch.load(MODEL_PATH, map_location=torch.device("cpu"))
 			
 			# Initialize tokenizer
 			tokenizer = AutoTokenizer.from_pretrained('bert-base-uncased')
+			intent_tokenizer = AutoTokenizer.from_pretrained(INTENT_MODEL_NAME)
+			intent_model = AutoModelForSequenceClassification.from_pretrained(INTENT_MODEL_NAME)
+			intent_model.eval()
+			print("Intent model loaded successfully")
 			
 			# Check if it's a state dict or full model
 			if isinstance(saved_data, dict) and 'state_dict' in saved_data:
@@ -43,28 +48,22 @@ async def load_model():
 				model = saved_data
 			
 			model.eval()  # Set to evaluation mode
-			print("Model loaded successfully")
+			print("Emotion model loaded successfully")
 		except Exception as e:
 			print(f"Error loading model: {e}")
 			model = None
+			tokenizer = None
+			intent_model = None
+			intent_tokenizer = None
+				
 	else:
 		print(f"Model file not found: {MODEL_PATH}")
-	try:
-        intent_tokenizer = AutoTokenizer.from_pretrained(INTENT_MODEL_NAME)
-        intent_model = AutoModelForSequenceClassification.from_pretrained(INTENT_MODEL_NAME)
-        intent_model.eval()
-        print("Intent model loaded successfully")
-    except Exception as e:
-        print(f"Error loading intent model: {e}")
-        intent_model = None
-
-
 
 def predict_intent(text: str, threshold: float = 0.7):
     inputs = intent_tokenizer(text, return_tensors="pt", truncation=True, padding=True, max_length=512)
     with torch.no_grad():
         outputs = intent_model(**inputs)
-        probs = F.softmax(outputs.logits, dim=-1).squeeze()
+        probs = torch.nn.functional.softmax(outputs.logits, dim=-1).squeeze()
         confidence, pred_idx = torch.max(probs, dim=0)
         confidence = confidence.item()
         pred_idx = pred_idx.item()
@@ -74,18 +73,12 @@ def predict_intent(text: str, threshold: float = 0.7):
     if confidence < threshold:
         return "uncertain", confidence
     return label, confidence
-# @app.get("/health")
-# async def health_check():
-# 	if model is not None:
-# 		return {"status": "ok", "model_loaded": True}
-# 	else:
-# 		return {"status": "ok", "model_loaded": False}
 
 def predict_emotion(text: str, threshold: float = 0.7):
-    inputs = emotion_tokenizer(text, return_tensors="pt", truncation=True, padding=True, max_length=512)
+    inputs = tokenizer(text, return_tensors="pt", truncation=True, padding=True, max_length=512)
     with torch.no_grad():
-        outputs = emotion_model(**inputs)
-        probs = F.softmax(outputs.logits, dim=-1).squeeze()
+        outputs = model(**inputs)
+        probs = torch.nn.functional.softmax(outputs.logits, dim=-1).squeeze()
         confidence, pred_idx = torch.max(probs, dim=0)
         confidence = confidence.item()
         pred_idx = pred_idx.item()
@@ -103,9 +96,6 @@ def predict_emotion(text: str, threshold: float = 0.7):
         return "uncertain", confidence
     return class_responses.get(pred_idx, "I'm here to listen."), confidence
 
-
-
-
 @app.post("/api/v/chat", response_model=ChatResponse)
 async def chat(request: ChatRequest) -> ChatResponse:
 	if not request.prompt:
@@ -114,21 +104,21 @@ async def chat(request: ChatRequest) -> ChatResponse:
 		raise HTTPException(status_code=500, detail="Model not loaded.")
 
 	try:
-        # Step 1: Emotion detection
-        emotion, emo_conf = predict_emotion(request.prompt, threshold=0.7)
-        if emotion == "uncertain":
-            return ChatResponse(response=f"I'm not sure about your feelings yet. Can you tell me more? (Confidence: {emo_conf:.2f})")
+		# Step 1: Emotion detection
+		emotion, emo_conf = predict_emotion(request.prompt, threshold=0.7)
+		if emotion == "uncertain":
+			return ChatResponse(response=f"I'm not sure about your feelings yet. Can you tell me more? (Confidence: {emo_conf:.2f})")
 
-        # Step 2: Intent detection
-        intent, intent_conf = predict_intent(request.prompt, threshold=0.7)
-        if intent == "uncertain":
-            return ChatResponse(response=f"I understand how you feel. Could you explain more about what you'd like me to do? (Confidence: {intent_conf:.2f})")
+		# Step 2: Intent detection
+		intent, intent_conf = predict_intent(request.prompt, threshold=0.7)
+		if intent == "uncertain":
+			return ChatResponse(response=f"I understand how you feel. Could you explain more about what you'd like me to do? (Confidence: {intent_conf:.2f})")
 
-        response = f"{emotion} I also understood your intent as: {intent} (Conf: {intent_conf:.2f})"
-        return ChatResponse(response=response)
+		response = f"{emotion} (Confidence: {emo_conf:.2f}) I also understood your intent as: {intent} (Confidence: {intent_conf:.2f})"
+		return ChatResponse(response=response)
 
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Inference error: {str(e)}")
+	except Exception as e:
+		raise HTTPException(status_code=500, detail=f"Inference error: {str(e)}")
 	
 	# try:
 	# 	# Tokenize the input
