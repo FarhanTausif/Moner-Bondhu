@@ -1,4 +1,4 @@
-!pip install pymupdf langchain langchain-community chromadb sentence-transformers transformers accelerate
+# !pip install pymupdf langchain langchain-community chromadb sentence-transformers transformers accelerate
 import fitz  # PyMuPDF
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain.schema import Document

@@ -75,7 +75,7 @@ async def health_check():
         }
     }
 
-def predict_intent(text: str, threshold: float = 0.7):
+def predict_intent(text: str, threshold: float = 0.6):
     inputs = intent_tokenizer(text, return_tensors="pt", truncation=True, padding=True, max_length=512)
     with torch.no_grad():
         outputs = intent_model(**inputs)
@@ -90,7 +90,7 @@ def predict_intent(text: str, threshold: float = 0.7):
         return "uncertain", confidence
     return label, confidence
 
-def predict_emotion(text: str, threshold: float = 0.7):
+def predict_emotion(text: str, threshold: float = 0.6):
     inputs = tokenizer(text, return_tensors="pt", truncation=True, padding=True, max_length=512)
     with torch.no_grad():
         outputs = model(**inputs)
@@ -100,12 +100,12 @@ def predict_emotion(text: str, threshold: float = 0.7):
         pred_idx = pred_idx.item()
 
     class_responses = {
-        0: "I hear that you might be feeling sad or down. It's okay to feel this way, and I'm here to listen.",
-        1: "It sounds like you might be experiencing some anxiety. Take a deep breath - you're not alone in this.",
-        2: "I can sense some anger in your words. It's natural to feel frustrated sometimes. Would you like to talk about what's bothering you?",
-        3: "You seem to be feeling positive! That's wonderful. What's bringing you joy today?",
-        4: "I detect that you might be feeling fearful or worried. Remember that it's okay to feel scared, and talking about it can help.",
-        5: "It sounds like you might be feeling surprised or uncertain. Change can be overwhelming, but I'm here to support you."
+        0: "Sadness",
+        1: "Joyful",
+        2: "Love",
+        3: "Anger",
+        4: "Fear",
+        5: "Surprise"
     }
 
     if confidence < threshold:
@@ -126,14 +126,14 @@ async def chat(request: ChatRequest) -> ChatResponse:
 
 	try:
 		# Step 1: Emotion detection
-		emotion, emo_conf = predict_emotion(request.prompt, threshold=0.7)
+		emotion, emo_conf = predict_emotion(request.prompt, threshold=0.6)
 		if emotion == "uncertain":
-			return ChatResponse(response=f"I'm not sure about your feelings yet. Can you tell me more? (Confidence: {emo_conf:.2f})")
+			return ChatResponse(response=f"I'm not sure about your feelings yet. Can you tell me more? Detected emotion: ({emotion}), (Confidence: {emo_conf:.2f})")
 
-		# Step 2: Intent detection
-		intent, intent_conf = predict_intent(request.prompt, threshold=0.7)
-		if intent == "uncertain":
-			return ChatResponse(response=f"I understand how you feel. Could you explain more about what you'd like me to do? (Confidence: {intent_conf:.2f})")
+		# Step 2: Intent detection (Pass intent into the pipeline, regardless of an uncertain one)
+		intent, intent_conf = predict_intent(request.prompt, threshold=0.6)
+		# if intent == "uncertain":
+		# 	return ChatResponse(response=f"I understand how you feel. Could you explain more about the intent? Detected emotion: ({emotion}), (Confidence: {intent_conf:.2f})")
 
 		response = f"{emotion} (Confidence: {emo_conf:.2f}) I also understood your intent as: {intent} (Confidence: {intent_conf:.2f})"
 		return ChatResponse(response=response)
