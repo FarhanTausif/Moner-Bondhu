@@ -1,75 +1,131 @@
 # Moner-Bondhu Backend API
 
-A FastAPI-based backend service for the Moner-Bondhu mental health chatbot application. This service provides emotion classification and mental health responses using a fine-tuned BERT model.
+A sophisticated FastAPI-based backend service for the Moner-Bondhu mental health chatbot application. This service integrates emotion classification, intent detection, knowledge retrieval (RAG), and Google Gemini AI to provide intelligent, empathetic mental health support.
 
-## Features
+## 🌟 Features
 
-- **Emotion Classification**: Uses a pre-trained BERT model to classify text into 6 emotion categories
-- **Mental Health Responses**: Provides contextual and empathetic responses based on detected emotions
-- **RESTful API**: Clean FastAPI implementation with proper request/response schemas
-- **Model Integration**: Seamlessly loads and serves a custom BERT model (`bert_model_corrected.pt`)
+### Core AI Components
+- **Emotion Classification**: Fine-tuned BERT model classifying text into 6 emotion categories
+- **Intent Detection**: BERT-based intent classifier for understanding user needs
+- **Knowledge Retrieval (RAG)**: ChromaDB vector store with mental health resources
+- **Fusion Layer**: Intelligent combination of emotion, intent, and context
+- **Gemini AI Integration**: Google's advanced language model for natural responses
 
-## Emotion Categories
+### Additional Features
+- **RESTful API**: Clean FastAPI implementation with proper schemas
+- **Health Monitoring**: Endpoint to check model loading status
+- **Error Handling**: Comprehensive error responses and logging
+- **Environment Configuration**: Secure API key management with .env files
 
-The model classifies text into 6 emotional states:
-1. **Sadness** - Detects feelings of sadness or being down
-2. **Anxiety** - Identifies anxious or worried states
-3. **Anger** - Recognizes anger and frustration
-4. **Joy** - Detects positive and happy emotions
-5. **Fear** - Identifies fearful or scared feelings
-6. **Surprise** - Recognizes surprise or uncertainty
+## 🎯 Emotion Categories
 
-## API Endpoints
+The emotion classifier identifies 6 emotional states:
+1. **Sadness** - Feelings of sadness, depression, or being down
+2. **Joyful** - Positive emotions, happiness, and contentment
+3. **Love** - Affection, care, and positive relationships
+4. **Anger** - Frustration, irritation, and anger
+5. **Fear** - Anxiety, worry, and fearful feelings
+6. **Surprise** - Unexpected emotions and reactions
+
+## 🔄 Intent Categories
+
+The intent classifier detects user intentions:
+- **Greeting** - Hello, hi, good morning/evening
+- **Seek Support** - Asking for help, emotional support
+- **Information** - Requesting mental health information
+- **Goodbye** - Ending conversation, farewell
+- **Smalltalk** - Casual conversation
+- **Affirmation** - Positive acknowledgments
+
+## 📡 API Endpoints
 
 ### POST `/api/v/chat`
 
-Main chat endpoint that processes user prompts and returns AI responses.
+Main chat endpoint with emotion-aware, context-enhanced responses powered by Gemini AI.
 
 **Request Body:**
 ```json
 {
-  "prompt": "Hello, how are you feeling today?"
+  "prompt": "I'm feeling really anxious about my upcoming exams and can't sleep."
 }
 ```
 
 **Response:**
 ```json
 {
-  "response": "I hear that you might be feeling sad or down. It's okay to feel this way, and I'm here to listen. (Confidence: 0.85)"
+  "response": "I understand you're feeling anxious about your exams, and it's completely normal to feel this way. The sleeplessness you're experiencing is often connected to anxiety. Try some deep breathing exercises before bed and consider breaking your study sessions into smaller, manageable chunks."
 }
 ```
 
-## Project Structure
+### GET `/health`
+
+Health check endpoint to monitor system status.
+
+**Response:**
+```json
+{
+  "status": "healthy",
+  "models_loaded": {
+    "emotion_model": true,
+    "emotion_tokenizer": true,
+    "intent_model": true,
+    "intent_tokenizer": true
+  }
+}
+```
+
+## 📁 Project Structure
 
 ```
 backend/
 ├── app/
-│   ├── __init__.py
-│   ├── main.py          # FastAPI application
-│   └── schemas.py       # Pydantic request/response models
-├── bert_model_corrected.pt  # Pre-trained BERT model
-├── requirements.txt     # Python dependencies
-├── run.py              # Server startup script
-├── test_api.py         # API testing script
-└── README.md           # This file
+│   ├── main.py                    # FastAPI application with Gemini integration
+│   ├── schemas.py                 # Pydantic request/response models
+│   ├── fusionLayer.py            # AI fusion layer for combining models
+│   ├── createKB.py               # Knowledge base creation script
+│   ├── intent_model/             # Intent model tokenizer files
+│   │   ├── special_tokens_map.json
+│   │   ├── tokenizer_config.json
+│   │   ├── tokenizer.json
+│   │   └── vocab.txt
+│   ├── assets/                   # Mental health PDF resources
+│   │   ├── anxiety-self-help.pdf
+│   │   ├── trauma-informed-care.pdf
+│   │   └── mental-health-considerations.pdf
+│   └── chroma_db/               # Vector database for RAG
+├── bert_model_corrected.pt       # Fine-tuned BERT emotion classifier
+├── intent_model.pt              # BERT-based intent classifier
+├── requirements.txt             # Python dependencies
+├── start.sh                     # Automated startup script
+├── .env.example                 # Environment variables template
+├── .env                         # Environment configuration (in .gitignore)
+└── README.md                    
 ```
 
-## Installation & Setup
+## 🚀 Installation & Setup
 
 ### Prerequisites
 - Python 3.8+
 - Virtual environment (recommended)
+- Google Gemini API key
 
 ### Step 1: Clone and Navigate
 ```bash
-git clone <repository-url>
-cd backend
+git clone https://github.com/FarhanTausif/Moner-Bondhu.git
+cd Moner-Bondhu/backend
 ```
 
-### Step 2: Create Virtual Environment
+### Step 2: Environment Setup
 ```bash
+# Create virtual environment
 python3 -m venv venv
 source venv/bin/activate  # On Windows: venv\Scripts\activate
+
+# Copy environment template
+cp .env.example .env
+
+# Edit .env file and add your Gemini API key
+nano .env  # Add: GEMINI_API_KEY=your_api_key_here
 ```
 
 ### Step 3: Install Dependencies
@@ -79,88 +135,163 @@ pip install -r requirements.txt
 
 ### Step 4: Start the Server
 ```bash
-uvicorn app.main:app --reload --port 8000
-```
-
-Or use the provided run script:
-```bash
+# Using the automated script (recommended)
 chmod +x start.sh
 ./start.sh
+
+# Or manually
+uvicorn app.main:app --reload --port 8000
 ```
 
 The API will be available at `http://localhost:8000`
 
-## Dependencies
+## 📦 Dependencies
 
-- **FastAPI**: Modern web framework for building APIs
-- **Uvicorn**: ASGI server for FastAPI
+### Core Framework
+- **FastAPI**: Modern, fast web framework for building APIs
+- **Uvicorn**: Lightning-fast ASGI server
+
+### AI/ML Libraries
 - **PyTorch**: Deep learning framework for model inference
-- **Transformers**: Hugging Face library for BERT model handling
+- **Transformers**: Hugging Face library for BERT models
+- **google-generativeai**: Google Gemini AI integration
+- **sentence-transformers**: Embedding models for RAG
+
+### Data & Storage
+- **ChromaDB**: Vector database for knowledge retrieval
+- **LangChain**: Framework for RAG implementation
+- **python-dotenv**: Environment variable management
+
+### Utilities
 - **Pydantic**: Data validation and serialization
+- **PyPDF2**: PDF processing for knowledge base
 
-## Model Information
+## 🧠 AI Architecture
 
-- **Model Type**: BERT for Sequence Classification
-- **Classes**: 6 emotion categories
-- **Architecture**: BERT-base-uncased with custom classification head
-- **Input**: Text prompts (max 512 tokens)
-- **Output**: Emotion classification with confidence scores
+### Data Flow
+1. **User Input** → Emotion & Intent Classification
+2. **Knowledge Retrieval** → Relevant mental health resources from vector DB
+3. **Fusion Layer** → Combines emotion, intent, and context
+4. **Enhanced Prompt** → Structured prompt for Gemini AI
+5. **Gemini Response** → Natural, empathetic mental health support
 
-## API Documentation
+### Model Information
+- **Emotion Model**: Fine-tuned BERT-base-uncased (6 classes)
+- **Intent Model**: BERT-based classification (6 intents)
+- **Embedding Model**: all-MiniLM-L6-v2 for RAG
+- **Language Model**: Google Gemini Pro for response generation
 
-Once the server is running, visit:
+## 📚 Knowledge Base
+
+The system includes a curated knowledge base of mental health resources:
+- Anxiety self-help guides
+- Trauma-informed care information
+- Mental health considerations
+- Safety conversation guidelines
+
+### Creating/Updating Knowledge Base
+```bash
+python app/createKB.py
+```
+
+## 🔧 API Documentation
+
+Once the server is running, access:
 - **Interactive API Docs**: `http://localhost:8000/docs`
 - **ReDoc Documentation**: `http://localhost:8000/redoc`
+- **OpenAPI Schema**: `http://localhost:8000/openapi.json`
 
-## Testing
+## 🧪 Testing
 
-Use the provided test script to verify API functionality:
+### Example Test Requests
+
 ```bash
-python test_api.py
-```
-
-Or test manually with curl:
-```bash
+# Emotion Detection
 curl -X POST "http://localhost:8000/api/v/chat" \
   -H "Content-Type: application/json" \
-  -d '{"prompt": "I am feeling very anxious today"}'
+  -d '{"prompt": "I feel really sad and lonely today"}'
+
+# Intent Recognition
+curl -X POST "http://localhost:8000/api/v/chat" \
+  -H "Content-Type: application/json" \
+  -d '{"prompt": "Can you help me with anxiety management?"}'
+
+# Health Check
+curl -X GET "http://localhost:8000/health"
 ```
 
-## Development
+### Response Examples
+
+**Emotional Support Response:**
+```json
+{
+  "response": "I hear that you're feeling sad and lonely, and I want you to know that these feelings are valid and you're not alone in experiencing them. Loneliness can be really challenging, but reaching out like you just did is a positive step. Consider connecting with a trusted friend or family member, or explore local support groups in your community."
+}
+```
+
+## 🔒 Security & Privacy
+
+- **Environment Variables**: Secure API key storage
+- **No Data Persistence**: User conversations are not stored
+- **Error Handling**: Prevents sensitive information leakage
+- **CORS Configuration**: Configurable for production deployment
+
+## 🚀 Development
 
 ### Running in Development Mode
 ```bash
-uvicorn app.main:app --reload --port 8000
+uvicorn app.main:app --reload --port 8000 --log-level debug
 ```
 
-The `--reload` flag enables auto-reloading when code changes are detected.
-
 ### Adding New Features
-1. Update `app/main.py` for new endpoints
-2. Add corresponding schemas in `app/schemas.py`
-3. Test using `test_api.py` or manual testing
+1. Update models in `app/fusionLayer.py`
+2. Modify API endpoints in `app/main.py`
+3. Add schemas in `app/schemas.py`
+4. Update knowledge base in `app/createKB.py`
 
-## Production Deployment
+### Environment Variables
+Create a `.env` file with:
+```
+GEMINI_API_KEY=your_gemini_api_key_here
+LOG_LEVEL=info
+CORS_ORIGINS=http://localhost:3000,http://localhost:3001
+```
 
-For production deployment, consider:
-- Using a production ASGI server (e.g., Gunicorn with Uvicorn workers)
-- Adding environment-based configuration
-- Implementing proper logging and monitoring
-- Setting up CORS policies appropriately
-- Using HTTPS/SSL certificates
+## 📈 Production Deployment
 
-## Contributing
+### Recommended Setup
+- **Server**: Gunicorn with Uvicorn workers
+- **Environment**: Docker containerization
+- **Database**: Persistent ChromaDB storage
+- **Monitoring**: Health check endpoints
+- **Security**: HTTPS, API rate limiting
+
+### Docker Deployment
+```bash
+# Build image
+docker build -t moner-bondhu-backend .
+
+# Run container
+docker run -p 8000:8000 --env-file .env moner-bondhu-backend
+```
+
+## 🤝 Contributing
 
 1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Test thoroughly
-5. Submit a pull request
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
 
-## License
+### Development Guidelines
+- Follow PEP 8 style guidelines
+- Add comprehensive error handling
+- Include docstrings for all functions
+- Test all API endpoints thoroughly
+- Update documentation for new features
 
-[Add your license information here]
+For technical support, please create an issue in the GitHub repository.
 
-## Support
+---
 
-For issues and questions, please create an issue in the repository or contact the development team.
+**Made with 💙 for mental health awareness in Bangladesh**
