@@ -3,6 +3,10 @@ from app.schemas import ChatRequest, ChatResponse, ErrorResponse
 import torch
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
 import os 
+from langchain_community.vectorstores import Chroma
+from langchain_community.embeddings import SentenceTransformerEmbeddings
+from dotenv import load_dotenv
+load_dotenv()  # Load environment variables from .env file
 
 app = FastAPI()
 
@@ -13,6 +17,21 @@ model = None
 tokenizer = None
 intent_model = None
 intent_tokenizer = None
+
+# Initialize Chroma vector store and setup retriever 
+if 'vectorstore' not in locals():
+    persist_dir = "./chroma_db"
+    embedding_model = SentenceTransformerEmbeddings(model_name="all-MiniLM-L6-v2")
+    vectorstore = Chroma(
+        embedding_function=embedding_model,
+        persist_directory=persist_dir,
+        collection_name="mental_health_knowledge"
+    )
+
+retriever = vectorstore.as_retriever(
+    search_type="similarity_score_threshold",
+    search_kwargs={"score_threshold": 0.5, "k": 5}
+)
 
 @app.on_event("startup")
 async def load_model():
@@ -112,6 +131,55 @@ def predict_emotion(text: str, threshold: float = 0.6):
         return "uncertain", confidence
     return class_responses.get(pred_idx, "I'm here to listen."), confidence
 
+import google.generativeai as genai
+
+# Configure Gemini API from .env
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+genai.configure(api_key=GEMINI_API_KEY)
+
+# Initialize Gemini model
+gemini_model = genai.GenerativeModel('gemini-2.5-flash')
+
+def fusion_chatbot(user_input):
+    # Step 1: Classify emotion + intent
+    emotion, emo_conf = predict_emotion(user_input)
+    intent, intent_conf = predict_intent(user_input)
+
+	# backend emotion classifier and intent classifier log in a single print
+    print(f"[FusionChatbot] User Input: {user_input} | Emotion: {emotion} (conf: {emo_conf:.2f}) | Intent: {intent} (conf: {intent_conf:.2f})")
+
+    # Step 2: Retrieve knowledge
+    docs = retriever.get_relevant_documents(user_input)
+    context = "\n".join([d.page_content for d in docs]) if docs else "No relevant resources found."
+
+    # Step 3: Fusion prompt for Gemini
+    prompt = f"""You are a compassionate and professional mental health support chatbot. Your responses should be empathetic, supportive, and safe.
+
+User Input: "{user_input}"
+
+Analysis:
+- Detected Emotion: {emotion} (confidence: {emo_conf:.2f})
+- Detected Intent: {intent} (confidence: {intent_conf:.2f})
+
+Relevant Mental Health Knowledge:
+{context}
+
+Instructions:
+1. Acknowledge the user's emotional state with empathy
+2. Provide supportive and constructive guidance
+3. If the situation seems serious (i.e. - suicidal), gently suggest professional help
+4. Keep your response conversational and caring
+5. Provide a detailed, thoughtful response so that the user feels heard and supported.
+
+Response:"""
+
+    try:
+        response = gemini_model.generate_content(prompt)
+        return response.text
+    except Exception as e:
+        print(f"Gemini API error: {e}")
+        return f"I understand you're feeling {emotion.lower()}. I'm here to support you. Could you tell me more about what you're experiencing?"
+
 @app.post("/api/v/chat", 
          response_model=ChatResponse,
          responses={
@@ -125,59 +193,9 @@ async def chat(request: ChatRequest) -> ChatResponse:
 		raise HTTPException(status_code=500, detail="Model not loaded.")
 
 	try:
-		# Step 1: Emotion detection
-		emotion, emo_conf = predict_emotion(request.prompt, threshold=0.6)
-		if emotion == "uncertain":
-			return ChatResponse(response=f"I'm not sure about your feelings yet. Can you tell me more? Detected emotion: ({emotion}), (Confidence: {emo_conf:.2f})")
-
-		# Step 2: Intent detection (Pass intent into the pipeline, regardless of an uncertain one)
-		intent, intent_conf = predict_intent(request.prompt, threshold=0.6)
-		# if intent == "uncertain":
-		# 	return ChatResponse(response=f"I understand how you feel. Could you explain more about the intent? Detected emotion: ({emotion}), (Confidence: {intent_conf:.2f})")
-
-		response = f"{emotion} (Confidence: {emo_conf:.2f}) I also understood your intent as: {intent} (Confidence: {intent_conf:.2f})"
+		# Use the enhanced fusion chatbot with Gemini
+		response = fusion_chatbot(request.prompt)
 		return ChatResponse(response=response)
 
 	except Exception as e:
 		raise HTTPException(status_code=500, detail=f"Inference error: {str(e)}")
-	
-	# try:
-	# 	# Tokenize the input
-	# 	inputs = tokenizer(
-	# 		request.prompt,
-	# 		return_tensors="pt",
-	# 		truncation=True,
-	# 		padding=True,
-	# 		max_length=512
-	# 	)
-		
-	# 	# Get model prediction
-	# 	with torch.no_grad():
-	# 		outputs = model(**inputs)
-			
-	# 		# If it's a classification model
-	# 		if hasattr(outputs, 'logits'):
-	# 			predictions = torch.nn.functional.softmax(outputs.logits, dim=-1)
-	# 			predicted_class = torch.argmax(predictions, dim=-1).item()
-	# 			confidence = torch.max(predictions).item()
-				
-	# 			# Define responses for 6 mental health classes
-	# 			class_responses = {
-	# 				0: "I hear that you might be feeling sad or down. It's okay to feel this way, and I'm here to listen.",
-	# 				1: "It sounds like you might be experiencing some anxiety. Take a deep breath - you're not alone in this.",
-	# 				2: "I can sense some anger in your words. It's natural to feel frustrated sometimes. Would you like to talk about what's bothering you?",
-	# 				3: "You seem to be feeling positive! That's wonderful. What's bringing you joy today?",
-	# 				4: "I detect that you might be feeling fearful or worried. Remember that it's okay to feel scared, and talking about it can help.",
-	# 				5: "It sounds like you might be feeling surprised or uncertain. Change can be overwhelming, but I'm here to support you."
-	# 			}
-				
-	# 			response = class_responses.get(predicted_class, "I'm here to listen and support you. Can you tell me more about how you're feeling?")
-	# 			response += f" (Confidence: {confidence:.2f})"
-	# 		else:
-	# 			# Fallback response
-	# 			response = "I'm here to help. Can you tell me more about how you're feeling?"
-		
-	# 	return ChatResponse(response=response)
-	# except Exception as e:
-	# 	raise HTTPException(status_code=500, detail=f"Model inference error: {str(e)}")
-    
