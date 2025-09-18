@@ -8,15 +8,69 @@ from main import predict_emotion, predict_intent
 # from createKB import documents
 import os
 
-persist_dir = "./chroma_db"
-embedding_model = SentenceTransformerEmbeddings(model_name="all-MiniLM-L6-v2")
+# persist_dir = "./chroma_db"
+# embedding_model = SentenceTransformerEmbeddings(model_name="all-MiniLM-L6-v2")
 
-vectorstore = Chroma.from_documents(
-    documents=documents, # replace this with langchain retriever
-    embedding=embedding_model,
-    persist_directory=persist_dir,
-    collection_name="mental_health_knowledge"
+# vectorstore = Chroma.from_documents(
+#     embedding_function=embedding_model,
+#     persist_directory=persist_dir,
+#     collection_name="mental_health_knowledge"
+# )
+
+if 'vectorstore' not in locals():
+    persist_dir = "./chroma_db"
+    embedding_model = SentenceTransformerEmbeddings(model_name="all-MiniLM-L6-v2")
+    vectorstore = Chroma(
+        embedding_function=embedding_model,
+        persist_directory=persist_dir,
+        collection_name="mental_health_knowledge"
+    )
+
+retriever = vectorstore.as_retriever(
+    search_type="similarity_score_threshold",
+    search_kwargs={"score_threshold": 0.5, "k": 5}
 )
+
+from transformers import pipeline
+
+generator = pipeline("text2text-generation", model="google/flan-t5-small") # or any suitable model (GEMINI 2.0 Flash-Pro)
+
+def fusion_chatbot(user_input):
+    # Step 1: Classify emotion + intent
+    emotion, emo_conf = predict_emotion(user_input)
+    intent, intent_conf = predict_intent(user_input)
+
+    # Step 2: Retrieve knowledge
+    docs = retriever.get_relevant_documents(user_input)
+    context = "\n".join([d.page_content for d in docs]) if docs else "No relevant resources found."
+
+    # Step 3: Fusion prompt
+    prompt = f"""
+    You are a safe, empathetic mental health chatbot.
+    
+    User: {user_input}
+    Detected Emotion: {emotion} (confidence {emo_conf:.2f})
+    Detected Intent: {intent} (confidence {intent_conf:.2f})
+    
+    Relevant Mental Health Resources:
+    {context}
+    
+    Respond in a kind, safe, supportive way. 
+    """
+
+    response = generator(prompt, max_length=200)[0]['generated_text']
+    return response
+
+
+user_query = "I'm feeling nervous about my exams and can't sleep."
+print(fusion_chatbot(user_query))
+
+
+
+
+
+
+
 
 # import torch
 # from transformers import AutoTokenizer, AutoModelForSequenceClassification
@@ -57,37 +111,3 @@ vectorstore = Chroma.from_documents(
 #         probs = torch.nn.functional.softmax(outputs.logits, dim=-1)
 #         pred = torch.argmax(probs, dim=-1).item()
 #         return intent_labels[pred], probs[0][pred].item()
-
-from transformers import pipeline
-
-generator = pipeline("text2text-generation", model="google/flan-t5-small") # or any suitable model (GEMINI 2.0 Flash-Pro)
-
-def fusion_chatbot(user_input):
-    # Step 1: Classify emotion + intent
-    emotion, emo_conf = predict_emotion(user_input)
-    intent, intent_conf = predict_intent(user_input)
-
-    # Step 2: Retrieve knowledge
-    docs = vectorstore.similarity_search(user_input, k=2)
-    context = "\n".join([d.page_content for d in docs])
-
-    # Step 3: Fusion prompt
-    prompt = f"""
-    You are a safe, empathetic mental health chatbot.
-    
-    User: {user_input}
-    Detected Emotion: {emotion} (confidence {emo_conf:.2f})
-    Detected Intent: {intent} (confidence {intent_conf:.2f})
-    
-    Relevant Mental Health Resources:
-    {context}
-    
-    Respond in a kind, safe, supportive way. 
-    """
-
-    response = generator(prompt, max_length=200)[0]['generated_text']
-    return response
-
-
-user_query = "I'm feeling nervous about my exams and can't sleep."
-print(fusion_chatbot(user_query))
